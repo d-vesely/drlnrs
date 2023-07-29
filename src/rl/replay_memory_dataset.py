@@ -89,7 +89,7 @@ class ReplayMemoryDataset(Dataset):
             reward_tensor -= 1
 
         if self.use_ignore_history:
-            return timestamp, enc_history, enc_recommended, reward_tensor, enc_next_history, enc_next_candidates, enc_ignore_history, enc_next_ignore_history
+            return enc_history, enc_recommended, reward_tensor, enc_next_history, enc_next_candidates, enc_ignore_history, enc_next_ignore_history
         # return timestamp, enc_history, enc_recommended, reward_tensor, enc_next_history, enc_next_candidates
         return enc_history, enc_recommended, reward_tensor, enc_next_history, enc_next_candidates
 
