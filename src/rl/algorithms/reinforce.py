@@ -7,15 +7,15 @@ import torch.nn.functional as F
 
 
 class ActorDiscrete(nn.Module):
-    def __init__(self, state_size, item_size, hidden_size):
+    def __init__(self, hidden_size, state_item_join_size):
         super(ActorDiscrete, self).__init__()
         # Input is state and item
-        self.fc1 = nn.Linear(state_size + item_size, hidden_size)
+        self.fc1 = nn.Linear(state_item_join_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, hidden_size)
-        self.fc4 = nn.Linear(hidden_size, int(hidden_size / 2))
+        self.fc3 = nn.Linear(hidden_size, hidden_size // 2)
+        self.fc4 = nn.Linear(hidden_size // 2, 256)
         # Output is action scores for discrete actions "recommend" and "ignore"
-        self.fc5 = nn.Linear(int(hidden_size / 2), 2)
+        self.fc5 = nn.Linear(256, 2)
 
     def forward(self, state, item):
         x = torch.cat((state, item), dim=-1)
@@ -27,10 +27,38 @@ class ActorDiscrete(nn.Module):
         return F.softmax(x, dim=-1)
 
 
+def get_trainee(config_model, device):
+    type = config_model["type"]
+    net_params = config_model["net_params"]
+
+    if type == "default":
+        actor = ActorDiscrete(**net_params)
+
+    actor = actor.to(device)
+
+    nets = [actor]
+    target_map = {"actor": None}
+    return nets, target_map
+
+
+def get_evaluatee(config_model, device):
+    type = config_model["type"]
+    net_params = config_model["net_params"]
+
+    if type == "default":
+        actor = ActorDiscrete(**net_params)
+
+    actor = actor.to(device)
+    actor.eval()
+
+    nets = [actor]
+    return nets
+
+
 class REINFORCE():
     def __init__(self, device):
         self.device = device
-        self.eps = np.finfo(np.float32).eps.item()  # TODO torch
+        self.eps = torch.finfo(torch.float32).eps
 
     def act(self, action_probs):
         # print(action_probs)

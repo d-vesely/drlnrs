@@ -117,8 +117,7 @@ def pad_candidates(batch):
 
 
 class ReplayMemoryEpisodicDataset(Dataset):
-    def __init__(self, embeddings_map_path, replay_memory_path,
-                 encoder_kwargs={}):
+    def __init__(self, replay_memory_path, encoder_kwargs={}):
         """Initialize replay memory dataset
 
         Arguments:
@@ -129,7 +128,7 @@ class ReplayMemoryEpisodicDataset(Dataset):
             encoder_kwargs -- encoder_kwargs (default: {{}})
         """
         # Initialize encoder
-        self.encoder = Encoder(embeddings_map_path, **encoder_kwargs)
+        self.encoder = Encoder(**encoder_kwargs)
         # Read replay memory pandas dataframe
         self.replay_memory_episodic = pd.read_feather(replay_memory_path)
 

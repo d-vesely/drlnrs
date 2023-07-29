@@ -3,14 +3,15 @@ import torch.nn as nn
 import torch.optim as optim
 
 from ..algorithms.td3 import get_trainee
-from trainer_base import _TrainerBase
+from .trainer_base import _TrainerBase
 
 
 class TrainerTD3(_TrainerBase):
     def __init__(self, model_name, device,
                  pos_rm_path, neg_rm_path,
-                 encoder_params, learning_params, model_params, rm_episodic_path=""):
-        super(_TrainerBase).__init__(
+                 encoder_params, learning_params, model_params,
+                 ep_rm_path=None, seed=None):
+        super().__init__(
             model_name,
             device,
             pos_rm_path,
@@ -18,14 +19,14 @@ class TrainerTD3(_TrainerBase):
             encoder_params,
             learning_params,
             model_params,
-            self._training_step
+            ep_rm_path,
+            seed
         )
 
-    def set_trainee(self, type):
+    def set_trainee(self):
         nets, target_map = get_trainee(
             self.config_model,
             self.device,
-            type
         )
         self.actor, self.target_actor, \
             self.critic_1, self.target_critic_1, \
@@ -49,36 +50,26 @@ class TrainerTD3(_TrainerBase):
         self.optimizers = [self.optimizer_actor, self.optimizer_critic]
         self.schedulers = self._prepare_schedulers()
         self.criterion_critic = nn.SmoothL1Loss()
-        self.type = type
 
-    def _training_step(self, batch, step_i, gamma):
+    def _training_step(self, batch, step_i, gamma, print_q):
         state, item, reward, next_state, candidates, not_done = batch
 
         action = (item / torch.linalg.norm(item)) * reward[0]
-        if self.type == "default":
-            _, state_embedding = self.actor(state)
-        elif self.type == "lstm":  # TODO
-            prev_candidates = torch.vstack([item, candidates])
-            prev_candidates = prev_candidates[
-                torch.randperm(prev_candidates.size()[0])
-            ]
-            _, state_embedding = self.actor(state, prev_candidates)
+        print((action**2).sum())
+        _, state_embedding = self.actor(state)
 
         q_value_1 = self.critic_1(state_embedding.detach(), action)
         q_value_2 = self.critic_2(state_embedding.detach(), action)
         q_value_1 = q_value_1.squeeze(-1)
         q_value_2 = q_value_2.squeeze(-1)
+        if print_q:
+            print("[INFO] example Q values: ")
+            print(q_value_1)
 
         with torch.no_grad():
-            if self.type == "default":
-                next_action, next_state_embedding = self.target_actor(
-                    next_state
-                )
-            elif self.type == "lstm":
-                next_action, next_state_embedding = self.target_actor(
-                    next_state,
-                    candidates
-                )
+            next_action, next_state_embedding = self.target_actor(
+                next_state
+            )
 
             next_q_value_1 = self.target_critic_1(
                 next_state_embedding,
@@ -102,7 +93,7 @@ class TrainerTD3(_TrainerBase):
         self.optimizer_critic.step()
 
         if step_i % 2 == 0:
-            gen_action, _ = self.actor(state)
+            gen_action, se = self.actor(state)
 
             # TODO try different losses
             # TODO randomly pick q_value1/2
@@ -118,6 +109,9 @@ class TrainerTD3(_TrainerBase):
             sum_loss = sum_loss.mean()
 
             loss_actor = dist_loss + sum_loss
+            loss_actor = -self.critic_1(se, gen_action).mean() + sum_loss
+            print(gen_action)
+            print(loss_actor)
 
             self.optimizer_actor.zero_grad()
             loss_actor.backward()

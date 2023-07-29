@@ -9,7 +9,8 @@ from .trainer_base import _TrainerBase
 class TrainerDDPG(_TrainerBase):
     def __init__(self, model_name, device,
                  pos_rm_path, neg_rm_path,
-                 encoder_params, learning_params, model_params, rm_episodic_path=""):
+                 encoder_params, learning_params, model_params,
+                 ep_rm_path=None, seed=None):
         super().__init__(
             model_name,
             device,
@@ -18,25 +19,20 @@ class TrainerDDPG(_TrainerBase):
             encoder_params,
             learning_params,
             model_params,
-            rm_episodic_path
+            ep_rm_path,
+            seed
         )
 
-    def set_trainee(self, type):
+    def set_trainee(self):
         nets, target_map = get_trainee(
             self.config_model,
             self.device,
-            type
         )
         self.actor, self.target_actor, \
             self.critic, self.target_critic = nets
         self.target_map = target_map
         self._print_num_params(self.actor.parameters(), name="actor")
         self._print_num_params(self.critic.parameters(), name="critic")
-
-        self.target_actor.load_state_dict(self.actor.state_dict())
-        self.target_actor.eval()  # TODO
-
-        self._print_num_params(self.actor.parameters(), name="actor")
 
         self.optimizer_actor = optim.AdamW(
             self.actor.parameters(),
@@ -52,9 +48,8 @@ class TrainerDDPG(_TrainerBase):
         self.optimizers = [self.optimizer_actor, self.optimizer_critic]
         self.schedulers = self._prepare_schedulers()
         self.criterion_critic = nn.SmoothL1Loss()
-        self.type = type
 
-    def _training_step(self, batch, step_i, gamma):
+    def _training_step(self, batch, step_i, gamma, print_q):
         state, action, reward, next_state, candidates, not_done = batch
         batch_size = state.shape[0]
 
@@ -62,13 +57,7 @@ class TrainerDDPG(_TrainerBase):
         q_value = q_value.squeeze(-1)
 
         with torch.no_grad():
-            if self.type == "default":
-                proto_next_action = self.target_actor(next_state)
-            elif self.type == "lstm":
-                c_lstm = candidates.clone().detach()
-                c_lstm = torch.nan_to_num(c_lstm, nan=0.0, neginf=0.0)
-                proto_next_action = self.target_actor(next_state, c_lstm)
-
+            proto_next_action = self.target_actor(next_state)
             best_candidates = self._find_closest_candidates(
                 candidates,
                 proto_next_action,
@@ -99,27 +88,24 @@ class TrainerDDPG(_TrainerBase):
         loss_critic.backward()
         self.optimizer_critic.step()
 
-        if self.type == "default":
-            proto_action = self.actor(state)
-        elif self.type == "lstm":
-            prev_candidates = self._get_prev_candidates(
-                c_lstm,
-                action,
-                batch_size
-            )
-            proto_action = self.actor(
-                state,
-                prev_candidates
-            )
+        proto_action = self.actor(state)
 
-        action_sim_loss = torch.cdist(action, proto_action) * q_value.detach()
+        action_sim_loss = torch.cdist(
+            action, proto_action)  # * q_value.detach()
         action_sim_loss = action_sim_loss.mean()
 
         action_sum_loss = (proto_action.square().sum(dim=1).mean() - 6.769)**2
-        loss_actor = action_sim_loss + action_sum_loss
+        loss_actor = action_sim_loss  # + action_sum_loss
+        loss_actor = -self.critic(state, action).mean()
+        print(proto_action)
+        print(loss_actor)
         self.optimizer_actor.zero_grad()
         loss_actor.backward()
         self.optimizer_actor.step()
+
+        if print_q:
+            print("[INFO] example Q values: ")
+            print(q_value)
 
     def _find_closest_candidates(self, candidates, proto_action, batch_size):
         proto_action = proto_action.unsqueeze(1)
@@ -144,16 +130,3 @@ class TrainerDDPG(_TrainerBase):
             for k in k_values
         ]
         return k_values
-
-    def _get_prev_candidates(self, candidates, action, batch_size):
-        prev_candidates = torch.empty(
-            candidates.shape[0],
-            candidates.shape[1]+1,
-            candidates.shape[2],
-            device=self.device
-        )
-        for i in range(batch_size):
-            prev_candidates[i] = torch.vstack([action[i], candidates[i]])
-            prev_candidates[i] = prev_candidates[i][
-                torch.randperm(prev_candidates[i].size()[0])
-            ]

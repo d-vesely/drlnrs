@@ -5,31 +5,46 @@ from .evaluator_base import _EvaluatorBase
 
 
 class EvaluatorDDPG(_EvaluatorBase):
-    def __init__(self, development, model_name, device, test_model="final"):
+    def __init__(self, development, model_name, device, seed=None, test_ckpt=None):
+        self.ac = True
         super().__init__(
             development,
             model_name,
             device,
-            test_model
+            seed,
+            test_ckpt
         )
 
-    def set_evaluatee(self, type, involved):
+    def set_evaluatee(self, involved):
         nets = get_evaluatee(
             self.config_model,
             self.device,
-            type,
             involved
         )
+        self.involved = involved
         if involved == "a":
             self.actor, = nets
+            self._get_desc_sort_order = self._get_desc_sort_order_a
         elif involved == "c":
             self.critic, = nets
+            self._get_desc_sort_order = self._get_desc_sort_order_c
         elif involved == "ac":
             self.actor, self.critic = nets
+            self._get_desc_sort_order = self._get_desc_sort_order_ac
 
     def _load_checkpoint(self, checkpoint):
-        self.actor.load_state_dict(torch.load(checkpoint))
-        self.actor.eval()
+        actor_ckpt, critic_ckpt = checkpoint
+        if self.involved == "a":
+            self.actor.load_state_dict(torch.load(actor_ckpt))
+            self.actor.eval()
+        elif self.involved == "c":
+            self.critic.load_state_dict(torch.load(critic_ckpt))
+            self.critic.eval()
+        elif self.involved == "ac":
+            self.actor.load_state_dict(torch.load(actor_ckpt))
+            self.actor.eval()
+            self.critic.load_state_dict(torch.load(critic_ckpt))
+            self.critic.eval()
 
     def _get_desc_sort_order_a(self, state, candidates):
         proto_action = self.actor(state)
@@ -47,7 +62,7 @@ class EvaluatorDDPG(_EvaluatorBase):
         return desc_sort_order
 
     def _get_desc_sort_order_ac(self, state, candidates):
-        proto_action = self.actor(state, candidates)
+        proto_action = self.actor(state)
         proto_action = proto_action.unsqueeze(0)
         distances = torch.cdist(candidates, proto_action)
         distances = distances.reshape(-1)

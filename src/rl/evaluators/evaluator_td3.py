@@ -5,32 +5,29 @@ from .evaluator_base import _EvaluatorBase
 
 
 class EvaluatorTD3(_EvaluatorBase):
-    def __init__(self, development, model_name, device, test_model="final"):
+    def __init__(self, development, model_name, device, seed=None, test_ckpt=None):
         super().__init__(
             development,
             model_name,
             device,
-            test_model
+            seed,
+            test_ckpt
         )
 
-    def set_evaluatee(self, type):
+    def set_evaluatee(self):
         nets = get_evaluatee(
             self.config_model,
             self.device,
-            type
         )
         self.actor, = nets
-        self.type = type
+        self._get_desc_sort_order = self._get_desc_sort_order
 
     def _load_checkpoint(self, checkpoint):
         self.actor.load_state_dict(torch.load(checkpoint))
         self.actor.eval()
 
     def _get_desc_sort_order(self, state, candidates):
-        if self.type == "default":
-            action, _ = self.actor(state)
-        elif self.type == "lstm":
-            action, _ = self.actor(state, candidates)
+        action, _ = self.actor(state)
 
         candidate_scores = (action * candidates)
         candidate_scores = candidate_scores.sum(dim=-1)

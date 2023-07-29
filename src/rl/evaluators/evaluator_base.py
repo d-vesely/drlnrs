@@ -11,7 +11,6 @@ from tqdm.auto import tqdm
 
 from ... import constants
 from ..eval_dataset import EvalDataset
-# from reinforce import ActorDiscrete
 
 tqdm.pandas()
 
@@ -49,6 +48,10 @@ class _EvaluatorBase():
                 for filename in os.scandir(ckpts_dir)
             ]
             ckpts = [os.path.basename(ckpt) for ckpt in self.model_ckpts]
+            if hasattr(self, "ac"):
+                mid = len(ckpts) // 2
+                self.model_ckpts = [(self.model_ckpts[i], self.model_ckpts[i + mid])
+                                    for i in range(mid)]
             print(f"[INFO] model checkpoints: {ckpts}")
         else:
             self.model_ckpts = [
@@ -179,119 +182,6 @@ class _EvaluatorBase():
         print(f"[RESULT] Return: {mean_return:.4f}")
         return mean_return
 
-    def evaluate_REINFORCE(self):
-        for checkpoint in self.model_ckpts:
-            if os.path.basename(checkpoint).startswith("0"):
-                continue
-            print(
-                f"[INFO] evaluating model '{self.model_name}', checkpoint '{checkpoint}'"
-            )
-            # Prepare evaluation data
-            eval_dataset = EvalDataset(
-                self.config_encoder["emb_map_path"],
-                self.eval_path,
-                encoder_params=self.config_encoder["encoder_params"],
-                development=self.development
-            )
-            sampler = SequentialSampler(eval_dataset)
-
-            actor = ActorDiscrete(
-                self.config_model["state_size"],
-                self.config_model["item_size"],
-                self.config_model["hidden_size"]
-            ).to(self.device)
-            actor.load_state_dict(torch.load(checkpoint))
-            actor.eval()
-
-            if self.development:
-                returns = []
-            else:
-                # Prepare prediction buffer
-                predictions = StringIO()
-                csv_writer = writer(predictions)
-                columns = ["impression_id", "ranking"]
-                csv_writer.writerow(columns)
-
-            for index in tqdm(sampler):
-                if self.development:
-                    impression_id, state, candidates, \
-                        clicked_news_list, shown_news_list = eval_dataset[index]
-                else:
-                    impression_id, state, candidates = eval_dataset[index]
-
-                # Move all elements to device
-                state = state.to(self.device)
-                candidates = candidates.to(self.device)
-
-                # Copy state for each candidate
-                state_repeated = state.repeat(len(candidates), 1)
-                action_probs = actor(state_repeated, candidates)
-                desc_sort_order = torch.argsort(
-                    action_probs[:, 1], descending=True)
-                if index == 1000:
-                    print(action_probs)
-
-                if self.development:
-                    # Compute return (discounted sum of rewards)
-                    clicked_news = set(clicked_news_list)
-
-                    # Order shown news from best to worst
-                    shown_news = np.array(shown_news_list)
-                    shown_news = shown_news[desc_sort_order.cpu().numpy()]
-
-                    G = 0
-                    # Discount value must be < 1
-                    # Specific value does not matter
-                    # but should remain constant over experiments, otherwise
-                    # returns cannot be compared
-                    gamma = 0.9
-                    for t, news_id in enumerate(shown_news):
-                        reward = 0
-                        if news_id in clicked_news:
-                            reward = 1
-                        G += ((gamma**t) * reward)
-                    returns.append(G)
-                else:
-                    # Create ranking
-                    # Best q-value --> rank 1
-                    ranking = np.zeros(
-                        len(desc_sort_order), dtype=np.uintc)
-                    for i, idx in enumerate(desc_sort_order):
-                        # Add 1 to ranking (smallest rank is 1)
-                        ranking[idx] = i+1
-
-                    # Write prediction to buffer
-                    pred = [impression_id, ranking]
-                    csv_writer.writerow(pred)
-
-            if self.development:
-                # Compute mean and standard deviation over all returns
-                mean_return = np.array(returns).mean()
-                std_return = np.array(returns).std()
-                print(
-                    f"[RESULT] Return: {mean_return:.4f} +/- {std_return:.4f}"
-                )
-            else:
-                print(
-                    f"[INFO] writing predictions file to {self.pred_dir}"
-                )
-                # Read csv buffer into pandas dataframe
-                predictions.seek(0)
-                data_predictions = pd.read_csv(predictions)
-                # Convert strings back to lists
-                data_predictions["ranking"] = data_predictions["ranking"].progress_apply(
-                    lambda x: f"[{','.join(x[1:-1].split())}]"
-                )
-                # Write to txt file
-                data_predictions.to_csv(
-                    os.path.join(self.pred_dir, "prediction.txt"),
-                    sep=' ',
-                    index=False,
-                    header=False
-                )
-
-        print("[DONE] evaluation completed")
-
         # desc_sort_order = torch.zeros(
         #    len(shown_news_list), device=self.device)
         # desc_sort_order = []
@@ -350,7 +240,10 @@ class _EvaluatorBase():
     def evaluate(self):
         csv_writer = self._prepare_prediction_buffer()
         for ckpt in self.model_ckpts:
-            ckpt_name = os.path.basename(ckpt)
+            if hasattr(self, "ac"):
+                ckpt_name = ckpt
+            else:
+                ckpt_name = os.path.basename(ckpt)
             print(
                 f"[INFO] evaluating '{self.model_name}', checkpoint '{ckpt_name}'"
             )

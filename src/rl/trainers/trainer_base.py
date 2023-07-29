@@ -10,7 +10,6 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm.auto import tqdm
 
 from ... import constants
-# from reinforce import ActorDiscrete, REINFORCE
 from ..replay_memory_dataset import ReplayMemoryDataset, ReplayMemoryEpisodicDataset, pad_candidates
 
 
@@ -46,8 +45,7 @@ class _TrainerBase():
 
         if ep_rm_path is not None:
             print(f"[INFO] preparing episodic data and sampler")
-            self.ep_rm_data, self.sampler = \
-                self._prepare_data_episodic(ep_rm_path)
+            self.ep_rm_data = self._prepare_data_episodic(ep_rm_path)
         else:
             print(f"[INFO] preparing data and samplers")
             self.pos_rm_data, self.pos_sampler, \
@@ -101,12 +99,10 @@ class _TrainerBase():
 
     def _prepare_data_episodic(self, rm_episodic_path):
         ep_rm_dataset = ReplayMemoryEpisodicDataset(
-            self.config_encoder["embeddings_map_paths"],
             rm_episodic_path,
             self.config_encoder,
         )
-        sampler = SequentialSampler(ep_rm_dataset)  # TODO
-        return ep_rm_dataset, sampler
+        return ep_rm_dataset
 
     def _prepare_dataloaders(self, batch_size):
         returns = []
@@ -284,119 +280,6 @@ class _TrainerBase():
         for key, value in update_dict.items():
             getattr(self, config_name)[key] = value
         self._write_config_files()
-
-    def set_trainee_REINFORCE(self):
-        lr_decay_rate = self.config_learning["learning_decay_rate"]
-        def lr_lambda(lr_step): return lr_decay_rate ** lr_step
-
-        self.actor = ActorDiscrete(
-            self.config_model["state_size"],
-            self.config_model["item_size"],
-            self.config_model["hidden_size"]
-        ).to(self.device)
-
-        self._print_num_params(self.actor.parameters(), name="actor")
-
-        self.optimizer = optim.AdamW(
-            self.actor.parameters(),
-            lr=self.config_learning["learning_rate"],
-            amsgrad=True,
-            weight_decay=0.1
-        )
-        self.scheduler = optim.lr_scheduler.LambdaLR(
-            self.optimizer,
-            lr_lambda=lr_lambda
-        )
-
-        self.REINFORCE = REINFORCE(self.device)
-
-    def train_REINFORCE(self):
-        gamma = self.config_learning["gamma"]
-        pos_mem_pref = self.config_learning["pos_mem_pref"]
-        n_steps = self.config_learning["n_steps"]
-
-        freq_target_update = self.config_learning["freq_target_update"]
-        freq_lr_schedule = self.config_learning["freq_lr_schedule"]
-        freq_checkpoint_save = self.config_learning["freq_checkpoint_save"]
-        soft_target_update = self.config_learning["soft_target_update"]
-
-        initial_lr = self.optimizer.param_groups[0]['lr']
-        print(f"[INFO] initial learning rate: {initial_lr:.6f}")
-
-        # dataloader = DataLoader(self.episodic_memory,
-        #                        shuffle=True, batch_size=32)
-        # dl_iter = iter(dataloader)
-
-        self.ckpt_num = 0
-        running_hr = 0
-        running_rr = 0
-        for i in tqdm(range(1500000)):
-            # Sample random step from replay memory
-            # Choose whether to sample from positive or negative memory
-            states, items, rewards = self.episodic_memory[i]
-
-            # Move all elements to device
-            states = states.to(self.device)
-            items = items.to(self.device)
-            rewards = rewards.to(self.device)
-
-            ep_len = len(states)
-            n_clicks = rewards.sum()
-            r_click = (ep_len - n_clicks) / n_clicks
-
-            action_probs = self.actor(states, items)
-            action = self.REINFORCE.act(action_probs)
-            rs = np.zeros(ep_len)
-            hits = 0
-            for t in range(ep_len):
-                if action[t] == 0:
-                    if rewards[t] == 0:
-                        rs[t] = 1
-                    else:
-                        rs[t] = -r_click
-                else:
-                    if rewards[t] == 0:
-                        rs[t] = -1
-                    else:
-                        hits += 1
-                        rs[t] = r_click
-
-            self.REINFORCE.set_rewards_buffer(rs.copy())
-            hit_rate = hits / (n_clicks.item() + 0.0001) * 100
-            rec_rate = action.sum().item() / (n_clicks.item() + 0.0001) * 100
-            running_hr = 0.05 * hit_rate + (1 - 0.05) * running_hr
-            running_rr = 0.05 * rec_rate + (1 - 0.05) * running_rr
-
-            if (i % 100000) == 0:
-                print(f"running rec rate: {running_rr}")
-                print(f"running hit rate: {running_hr}")
-                print(ep_len)
-                print(
-                    f"items recommended {action.sum().item()}")
-                print(f"items actually clicked {n_clicks.item()}")
-                print(f"clicked items recommended {hits}")
-                print(action_probs)
-
-            returns = self.REINFORCE.get_returns(ep_len)
-            policy_loss = self.REINFORCE.get_loss(returns)
-
-            self.optimizer.zero_grad()
-            policy_loss.backward()
-            nn.utils.clip_grad_norm_(self.actor.parameters(), 1)
-            self.optimizer.step()
-
-            self.REINFORCE.reset()
-
-            if (i+1) % 250000 == 0:
-                self.scheduler.step()
-                new_lr = self.optimizer.param_groups[0]['lr']
-                print(f"[INFO] new learning rate: {new_lr:.6f}")
-
-            if i % 250000 == 0:
-                self._save_model(self.ckpt_num)
-                self.ckpt_num += 1
-
-        self._save_model(final=True)
 
     def train(self):
         gamma, pos_mem_pref, soft_target_update, \
