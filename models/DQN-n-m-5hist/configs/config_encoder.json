@@ -1,0 +1,13 @@
+{
+    "embeddings_map_paths": {
+        "title_and_abstract": "c:\\workbench\\developer\\drlnrs\\dataset_MIND\\MINDlarge_all\\embeddings\\title_and_abstract_emb_map.pt"
+    },
+    "news_enc_elements": [
+        "title_and_abstract"
+    ],
+    "news_embedding_size": 768,
+    "history_enc_method": "mean",
+    "weighted": true,
+    "alpha": 0.999,
+    "history_max_len": 5
+}

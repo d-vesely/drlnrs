@@ -1,0 +1,18 @@
+{
+    "batch_size": 64,
+    "learning_rate": 0.0001,
+    "learning_decay_rate": 0.7,
+    "gamma": 0.95,
+    "pos_mem_pref": 0.3,
+    "n_steps": 6000000,
+    "freq_lr_schedule": 1000000,
+    "freq_checkpoint_save": 1000000,
+    "progress_saves": [
+        10000,
+        100000,
+        200000
+    ],
+    "freq_target_update": 500,
+    "soft_target_update": false,
+    "tau": 0.005
+}

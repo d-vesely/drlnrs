@@ -1,0 +1,10 @@
+{
+    "type": "gru",
+    "double_learning": false,
+    "net_params": {
+        "item_size": 768,
+        "hidden_size": 4096,
+        "state_item_join_size": 1536,
+        "mode": "mean"
+    }
+}

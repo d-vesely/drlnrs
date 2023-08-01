@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class ActorTD3(nn.Module):
+class Actor(nn.Module):
     def __init__(self, state_size, item_size, hidden_size, tanh=False):
-        super(ActorTD3, self).__init__()
+        super(Actor, self).__init__()
         self.tanh = tanh
         # Input is state
         self.fc1 = nn.Linear(state_size, hidden_size)
@@ -20,33 +20,35 @@ class ActorTD3(nn.Module):
     def forward(self, state):
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
-        state_embedding = F.relu(self.fc3(x))
-        x = state_embedding.clone()
+        x = F.relu(self.fc3(x))
         x = F.relu(self.fc4(x))
         if self.tanh:
             action = torch.tanh(self.fc5(x))
         else:
             action = self.fc5(x)
-        return action, state_embedding
+        return action
 
 
-class CriticTD3(nn.Module):
-    def __init__(self, state_size, item_size, hidden_size):
-        super(CriticTD3, self).__init__()
+class Critic(nn.Module):
+    def __init__(self, hidden_size, state_item_join_size):
+        super(Critic, self).__init__()
         # Input is state + action
-        self.fc1 = nn.Linear(hidden_size + item_size, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, hidden_size // 2)
-        self.fc3 = nn.Linear(hidden_size // 2, 256)
+        self.fc1 = nn.Linear(state_item_join_size, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, hidden_size)
+        self.fc3 = nn.Linear(hidden_size, hidden_size // 2)
+        self.fc4 = nn.Linear(hidden_size // 2, 256)
         # Output is single q-value
-        self.fc4 = nn.Linear(256, 1)
+        self.fc5 = nn.Linear(256, 1)
 
-    def forward(self, state_embedding, action):
-        # Concat state and action vectors
-        x = torch.cat((state_embedding, action), dim=-1)
+    def forward(self, state, item):
+        mask = torch.all(torch.isfinite(item), dim=-1).unsqueeze(-1)
+        masked_item = item * mask
+        x = torch.cat((state, masked_item), dim=-1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))
-        q_value = self.fc4(x)
+        x = F.relu(self.fc4(x))
+        q_value = self.fc5(x)
         return q_value
 
 
@@ -55,13 +57,13 @@ def get_trainee(config_model, device):
     net_params = config_model["net_params"]
 
     if type == "default":
-        actor = ActorTD3(**net_params)
-        target_actor = ActorTD3(**net_params)
+        actor = Actor(**net_params)
+        target_actor = Actor(**net_params)
 
-    critic_1 = CriticTD3(**net_params)
-    critic_2 = CriticTD3(**net_params)
-    target_critic_1 = CriticTD3(**net_params)
-    target_critic_2 = CriticTD3(**net_params)
+    critic_1 = Critic(**net_params)
+    critic_2 = Critic(**net_params)
+    target_critic_1 = Critic(**net_params)
+    target_critic_2 = Critic(**net_params)
 
     actor = actor.to(device)
     target_actor = target_actor.to(device)
@@ -95,7 +97,7 @@ def get_evaluatee(config_model, device):
     net_params = config_model["net_params"]
 
     if type == "default":
-        actor = ActorTD3(**net_params)
+        actor = Actor(**net_params)
     actor = actor.to(device)
     actor.eval()
 

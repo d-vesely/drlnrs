@@ -48,8 +48,65 @@ class TrainerDDPG(_TrainerBase):
         self.optimizers = [self.optimizer_actor, self.optimizer_critic]
         self.schedulers = self._prepare_schedulers()
         self.criterion_critic = nn.SmoothL1Loss()
+        indirect = self.config_model["indirect"]
+        if indirect:
+            self._trainig_step = self._training_step_indirect
+        else:
+            self._trainig_step = self._training_step_direct
 
-    def _training_step(self, batch, step_i, gamma, print_q):
+    def _training_step_indirect(self, batch, step_i, gamma, print_q):
+        state, item, reward, next_state, candidates, not_done = batch
+
+        action = (item / torch.linalg.norm(item)) * reward[0]
+
+        q_value = self.critic(state, action)
+        q_value = q_value.squeeze(-1)
+
+        if print_q:
+            print("[INFO] example Q values: ")
+            print(q_value)
+
+        with torch.no_grad():
+            next_action = self.target_actor(next_state)
+
+            next_q_value = self.target_critic(
+                next_state,
+                next_action
+            )
+            next_q_value = next_q_value.squeeze(-1)
+            q_target = reward + (gamma * next_q_value * not_done)
+
+        loss_critic = self.criterion_critic(q_value, q_target)
+
+        self.optimizer_critic.zero_grad()
+        loss_critic.backward()
+        self.optimizer_critic.step()
+
+        gen_action = self.actor(state)
+
+        # TODO try different losses
+        # TODO randomly pick q_value1/2
+        # dist_loss = (torch.cdist(action, gen_action) * q_value_1.detach())
+        # dist_loss = dist_loss.mean()
+
+        # item_score = (item * gen_action).sum(dim=-1)
+        # if reward[0] == 1:
+        #     item_score = (-1 * item_score)
+        # item_score_loss = (item_score * q_value.detach()).mean()
+
+        # sum_loss = (((gen_action ** 2).sum(dim=1) - 1)**2)
+        # sum_loss = sum_loss.mean()
+
+        # loss_actor = dist_loss + sum_loss
+        loss_actor = -self.critic(state, action).mean()
+        print(gen_action)
+        print(loss_actor)
+
+        self.optimizer_actor.zero_grad()
+        loss_actor.backward()
+        self.optimizer_actor.step()
+
+    def _training_step_direct(self, batch, step_i, gamma, print_q):
         state, action, reward, next_state, candidates, not_done = batch
         batch_size = state.shape[0]
 

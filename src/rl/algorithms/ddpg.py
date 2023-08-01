@@ -30,9 +30,8 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
-    def __init__(self, state_size, item_size, hidden_size):
+    def __init__(self, hidden_size, state_item_join_size):
         super(Critic, self).__init__()
-        state_item_join_size = state_size + item_size
         # Input is state + action
         self.fc1 = nn.Linear(state_item_join_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)

@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -50,8 +51,13 @@ class TrainerTD3(_TrainerBase):
         self.optimizers = [self.optimizer_actor, self.optimizer_critic]
         self.schedulers = self._prepare_schedulers()
         self.criterion_critic = nn.SmoothL1Loss()
+        indirect = self.config_model["indirect"]
+        if indirect:
+            self._trainig_step = self._training_step_indirect
+        else:
+            self._trainig_step = self._training_step_direct
 
-    def _training_step(self, batch, step_i, gamma, print_q):
+    def _training_step_indirect(self, batch, step_i, gamma, print_q):
         state, item, reward, next_state, candidates, not_done = batch
 
         action = (item / torch.linalg.norm(item)) * reward[0]
@@ -82,10 +88,10 @@ class TrainerTD3(_TrainerBase):
             next_q_value_1 = next_q_value_1.squeeze(-1)
             next_q_value_2 = next_q_value_2.squeeze(-1)
             next_q_value = torch.min(next_q_value_1, next_q_value_2)
-            target = reward + (gamma * next_q_value * not_done)
+            q_target = reward + (gamma * next_q_value * not_done)
 
-        loss_critic_1 = self.criterion_critic(q_value_1, target)
-        loss_critic_2 = self.criterion_critic(q_value_2, target)
+        loss_critic_1 = self.criterion_critic(q_value_1, q_target)
+        loss_critic_2 = self.criterion_critic(q_value_2, q_target)
         loss_critic = loss_critic_1 + loss_critic_2
 
         self.optimizer_critic.zero_grad()
@@ -109,10 +115,111 @@ class TrainerTD3(_TrainerBase):
             sum_loss = sum_loss.mean()
 
             loss_actor = dist_loss + sum_loss
-            loss_actor = -self.critic_1(se, gen_action).mean() + sum_loss
+            if np.random.uniform() < 0.5:
+                loss_actor = -self.critic_1(state, action).mean()
+            else:
+                loss_actor = -self.critic_2(state, action).mean()
             print(gen_action)
             print(loss_actor)
 
             self.optimizer_actor.zero_grad()
             loss_actor.backward()
             self.optimizer_actor.step()
+
+    def _training_step_direct(self, batch, step_i, gamma, print_q):
+        state, action, reward, next_state, candidates, not_done = batch
+        batch_size = state.shape[0]
+
+        q_value_1 = self.critic_1(state, action)
+        q_value_2 = self.critic_2(state, action)
+        q_value_1 = q_value_1.squeeze(-1)
+        q_value_2 = q_value_2.squeeze(-1)
+
+        with torch.no_grad():
+            proto_next_action = self.target_actor(next_state)
+            best_candidates = self._find_closest_candidates(
+                candidates,
+                proto_next_action,
+                batch_size
+            )
+            k_values = self._get_k_values(best_candidates)
+            batch_next_q_value = torch.empty(batch_size, device=self.device)
+            for j in range(batch_size):
+                if torch.any(torch.isnan(best_candidates[j][0])) or \
+                   torch.any(torch.isinf(best_candidates[j][0])):
+                    batch_next_q_value[j] = 0
+                    continue
+
+                k = k_values[j]
+                next_state_repeated = next_state[j].repeat(k, 1)
+
+                next_q_value_1 = self.target_critic_1(
+                    next_state_repeated,
+                    best_candidates[j][:k]
+                )
+                next_q_value_2 = self.target_critic_1(
+                    next_state_repeated,
+                    best_candidates[j][:k]
+                )
+                next_q_value_1 = next_q_value_1.squeeze(-1)
+                next_q_value_2 = next_q_value_2.squeeze(-1)
+                next_q_value = torch.min(next_q_value_1, next_q_value_2)
+                batch_next_q_value[j] = torch.max(next_q_value)
+
+            q_target = reward + (gamma * batch_next_q_value * not_done)
+
+        loss_critic_1 = self.criterion_critic(q_value_1, q_target)
+        loss_critic_2 = self.criterion_critic(q_value_2, q_target)
+        loss_critic = loss_critic_1 + loss_critic_2
+
+        self.optimizer_critic.zero_grad()
+        loss_critic.backward()
+        self.optimizer_critic.step()
+
+        if step_i % 2 == 0:
+            proto_action = self.actor(state)
+
+            action_sim_loss = torch.cdist(
+                action, proto_action)  # * q_value.detach()
+            action_sim_loss = action_sim_loss.mean()
+
+            action_sum_loss = (
+                proto_action.square().sum(dim=1).mean() - 6.769)**2
+            loss_actor = action_sim_loss  # + action_sum_loss
+            if np.random.uniform() < 0.5:
+                loss_actor = -self.critic_1(state, action).mean()
+            else:
+                loss_actor = -self.critic_2(state, action).mean()
+            print(proto_action)
+            print(loss_actor)
+            self.optimizer_actor.zero_grad()
+            loss_actor.backward()
+            self.optimizer_actor.step()
+
+        if print_q:
+            print("[INFO] example Q values: ")
+            print(q_value_1)
+
+    def _find_closest_candidates(self, candidates, proto_action, batch_size):
+        proto_action = proto_action.unsqueeze(1)
+        distances = torch.cdist(candidates, proto_action)
+        distances = distances.squeeze(-1)
+        sort_order = torch.argsort(distances, dim=1, descending=False)
+        best_candidates = candidates[
+            torch.arange(batch_size).reshape(-1, 1),
+            sort_order,
+        ]
+        return best_candidates
+
+    def _get_k_values(self, best_candidates):
+        k_values = [
+            (c != torch.full((1, 768), -torch.inf,
+             device=self.device)).all(1).sum().item()
+            for c in best_candidates
+        ]
+        k_values = [
+            k if round(k * 0.25) == 0
+            else round(k * 0.25)
+            for k in k_values
+        ]
+        return k_values

@@ -4,7 +4,8 @@ import torch.nn.functional as F
 
 
 class DQN_C51(nn.Module):
-    def __init__(self, item_size, hidden_size, state_item_join_size, v, n_atoms):
+    def __init__(self, hidden_size, state_item_join_size,
+                 v, n_atoms):
         super(DQN_C51, self).__init__()
         # Register supports in own buffer
         self.register_buffer("supports", torch.linspace(-v, v, n_atoms))
@@ -35,9 +36,6 @@ def get_next_action(pmfs, supports):
     q_values = q_values.squeeze(-1)
     action = torch.argmax(q_values, dim=-1)
     return action, pmfs[torch.arange(len(pmfs)), action, 0]
-    # q_values = get_q_values(pmfs, supports)
-    # action = torch.argmax(q_values[:, :, 1], dim=1)
-    # return action, pmfs[torch.arange(len(pmfs)), action, 1]
 
 
 def get_q_values(pmfs, supports):

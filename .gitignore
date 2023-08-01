@@ -1,4 +1,5 @@
 .vscode/
 __pycache__/
 dataset_MIND/
-models/
+models/**/*.pth
+models/**/*.zip

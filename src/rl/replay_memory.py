@@ -222,7 +222,7 @@ class ReplayMemoryBuilder():
         print("[DONE] negative samples saved")
 
 
-class ReplayMemoryEpisodicBuilder():  # TODO ignore history
+class ReplayMemoryEpisodicBuilder():
     def __init__(self, path):
         self.path = path
 

@@ -1,0 +1,8 @@
+{
+    "type": "default",
+    "double_learning": false,
+    "net_params": {
+        "hidden_size": 4096,
+        "state_item_join_size": 1566
+    }
+}
