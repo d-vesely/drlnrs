@@ -1,0 +1,17 @@
+{
+    "embeddings_map_paths": {
+        "title_and_abstract": "c:\\workbench\\developer\\drlnrs\\dataset_MIND\\MINDlarge_all\\embeddings\\title_and_abstract_emb_map.pt",
+        "category": "c:\\workbench\\developer\\drlnrs\\dataset_MIND\\MINDlarge_all\\embeddings\\category_1hot_map.pt",
+        "sub_category": "c:\\workbench\\developer\\drlnrs\\dataset_MIND\\MINDlarge_all\\embeddings\\sub_category_emb_map.pt"
+    },
+    "news_enc_elements": [
+        "title_and_abstract",
+        "category",
+        "sub_category"
+    ],
+    "news_embedding_size": 1167,
+    "history_enc_method": "mean",
+    "weighted": true,
+    "alpha": 0.999,
+    "history_max_len": null
+}

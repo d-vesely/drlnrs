@@ -1,0 +1,4 @@
+checkpoint	mean_return
+actor_1.pth	0.7042833347663966
+actor_2.pth	0.7153684144231461
+actor_final.pth	0.7338120370123208
