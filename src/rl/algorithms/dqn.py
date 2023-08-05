@@ -28,6 +28,8 @@ class DQN(nn.Module):
         self.fc5 = nn.Linear(256, 1)
 
     def forward(self, state, item):
+        # item = (item - item.mean(dim=-1).unsqueeze(-1)) / \
+        #     item.std(dim=-1).unsqueeze(-1)
         mask = torch.all(torch.isfinite(item), dim=-1).unsqueeze(-1)
         masked_item = item * mask
         x = torch.cat((state, masked_item), dim=-1)
@@ -83,9 +85,6 @@ class DQNDueling(nn.Module):
         advantage_x = F.leaky_relu(self.advantage_fc2(advantage_x))
         advantage_x = F.leaky_relu(self.advantage_fc3(advantage_x))
 
-        # q_value = value_x + advantage_x - \
-        #     advantage_x.mean(dim=-1, keepdim=True)
-        # return q_value
         return value_x, advantage_x
 
     def _initialize_weights(self):
@@ -344,15 +343,6 @@ class DQNGRU(nn.Module):
         )
         gru_output_unpacked, _ = torch.nn.utils.rnn.pad_packed_sequence(
             gru_output, batch_first=True)
-
-        # weights = torch.tensor(
-        #     [0.999 ** (i+1) for i in range(gru_output_unpacked.shape[1])],
-        #     device=self.device
-        # )
-        # weights = weights.unsqueeze(0).repeat(
-        #     gru_output_unpacked.shape[0], 1).unsqueeze(-1)
-        # gru_output_unpacked = gru_output_unpacked * weights
-        # gru_output_unpacked = gru_output_unpacked.mean(dim=1)
 
         if self.mode == "additive":
             scores = self.V(torch.tanh(self.W(gru_output_unpacked))).squeeze(2)

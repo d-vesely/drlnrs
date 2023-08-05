@@ -43,6 +43,8 @@ class TrainerDQN(_TrainerBase):
         double_learning = self.config_model["double_learning"]
         if double_learning:
             self._training_step = self._training_step_double
+        elif self.config_model["type"] == "dueling":
+            self._training_step = self._training_step_duel
         else:
             self._training_step = self._training_step
 
@@ -69,6 +71,42 @@ class TrainerDQN(_TrainerBase):
             # Find max q-value and compute target
             max_next_q_value = torch.max(next_q_value, dim=1).values
             q_target = reward + (gamma * max_next_q_value * not_done)
+
+        # Update DQN
+        if print_q:
+            print("[INFO] example Q values: ")
+            print(q_value)
+        loss = self.criterion(q_value, q_target)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+    def _training_step_duel(self, batch, step_i, gamma, print_q):
+        state, item, reward, next_state, candidates, not_done = batch
+        n_candidates = candidates.shape[1]
+
+        with torch.no_grad():
+            # Copy next state for each candidate
+            rep_shape = self._get_rep_shape(state.shape, n_candidates)
+            next_state_rep = next_state.unsqueeze(1).repeat(*rep_shape)
+
+            # Compute q-values for all candidates
+            next_vals, next_adv = self.target_dqn(next_state_rep, candidates)
+            next_q_value = (next_adv - next_adv.nanmean(dim=1).unsqueeze(1)) + \
+                next_vals.nanmean(dim=1).unsqueeze(1)
+            next_q_value = next_q_value.squeeze(-1)
+
+            # Set q-values produced by padded-candidates to large negative number
+            next_q_value = torch.nan_to_num(next_q_value, nan=-10000)
+            # Find max q-value and compute target
+            max_next_q_value = torch.max(next_q_value, dim=1).values
+            q_target = reward + (gamma * max_next_q_value * not_done)
+
+        # Compute current q-value
+        value, adv = self.dqn(state, item)
+        q_value = value + \
+            (adv - next_adv.nanmean(dim=1).nan_to_num(nan=0))
+        q_value = q_value.squeeze(-1)
 
         # Update DQN
         if print_q:

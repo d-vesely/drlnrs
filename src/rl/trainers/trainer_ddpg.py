@@ -48,11 +48,13 @@ class TrainerDDPG(_TrainerBase):
         self.optimizers = [self.optimizer_actor, self.optimizer_critic]
         self.schedulers = self._prepare_schedulers()
         self.criterion_critic = nn.SmoothL1Loss()
+
+    def _training_step(self, batch, step_i, gamma, print_q):
         indirect = self.config_model["indirect"]
         if indirect:
-            self._trainig_step = self._training_step_indirect
+            self._training_step_indirect(batch, step_i, gamma, print_q)
         else:
-            self._trainig_step = self._training_step_direct
+            self._training_step_direct(batch, step_i, gamma, print_q)
 
     def _training_step_indirect(self, batch, step_i, gamma, print_q):
         state, item, reward, next_state, candidates, not_done = batch
@@ -84,21 +86,9 @@ class TrainerDDPG(_TrainerBase):
 
         gen_action = self.actor(state)
 
-        # TODO try different losses
-        # TODO randomly pick q_value1/2
-        # dist_loss = (torch.cdist(action, gen_action) * q_value_1.detach())
-        # dist_loss = dist_loss.mean()
+        sum_loss = (((gen_action ** 2).sum(dim=1).mean() - 1)**2)
 
-        # item_score = (item * gen_action).sum(dim=-1)
-        # if reward[0] == 1:
-        #     item_score = (-1 * item_score)
-        # item_score_loss = (item_score * q_value.detach()).mean()
-
-        # sum_loss = (((gen_action ** 2).sum(dim=1) - 1)**2)
-        # sum_loss = sum_loss.mean()
-
-        # loss_actor = dist_loss + sum_loss
-        loss_actor = -self.critic(state, action).mean()
+        loss_actor = -self.critic(state, gen_action).mean() + sum_loss
         print(gen_action)
         print(loss_actor)
 
@@ -147,13 +137,9 @@ class TrainerDDPG(_TrainerBase):
 
         proto_action = self.actor(state)
 
-        action_sim_loss = torch.cdist(
-            action, proto_action)  # * q_value.detach()
-        action_sim_loss = action_sim_loss.mean()
-
         action_sum_loss = (proto_action.square().sum(dim=1).mean() - 6.769)**2
-        loss_actor = action_sim_loss  # + action_sum_loss
-        loss_actor = -self.critic(state, action).mean()
+
+        loss_actor = -self.critic(state, proto_action).mean() + action_sum_loss
         print(proto_action)
         print(loss_actor)
         self.optimizer_actor.zero_grad()

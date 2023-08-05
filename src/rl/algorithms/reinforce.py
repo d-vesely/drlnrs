@@ -61,23 +61,19 @@ class REINFORCE():
         self.eps = torch.finfo(torch.float32).eps
 
     def act(self, action_probs):
-        # print(action_probs)
         m = Categorical(action_probs)
-        # print(m)
         action = torch.argmax(action_probs, dim=1)
-        # print(action)
         self.log_probs_buffer = m.log_prob(action)
-        # print(self.log_probs_buffer)
         return action
 
     def set_rewards_buffer(self, rewards_buffer):
         self.rewards_buffer = rewards_buffer
 
-    def get_returns(self, episode_length):
+    def get_returns(self, episode_length, gamma):
         G = 0
         returns = deque(maxlen=episode_length)
         for r in self.rewards_buffer[::-1]:
-            G = r + G
+            G = r + (gamma * G)
             returns.appendleft(G)
 
         returns = torch.tensor(returns, device=self.device)

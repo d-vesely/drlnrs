@@ -46,7 +46,7 @@ class TrainerREINFORCE(_TrainerBase):
 
     def train_REINFORCE(self):
         n_steps = self.config_learning["n_steps"]
-
+        gamma = self.config_learning["gamma"]
         freq_lr_schedule = self.config_learning["freq_lr_schedule"]
         freq_checkpoint_save = self.config_learning["freq_checkpoint_save"]
 
@@ -86,33 +86,30 @@ class TrainerREINFORCE(_TrainerBase):
             running_hr = 0.05 * hit_rate + (1 - 0.05) * running_hr
             running_rr = 0.05 * rec_rate + (1 - 0.05) * running_rr
 
-            if (i % 100000) == 0:
-                print(f"running rec rate: {running_rr}")
-                print(f"running hit rate: {running_hr}")
-                print(ep_len)
-                print(
-                    f"items recommended {action.sum().item()}")
-                print(f"items actually clicked {n_clicks.item()}")
-                print(f"clicked items recommended {hits}")
-                print(action_probs)
+            # if (i % 100000) == 0:
+            #     print(f"running rec rate: {running_rr}")
+            #     print(f"running hit rate: {running_hr}")
+            #     print(ep_len)
+            #     print(
+            #         f"items recommended {action.sum().item()}")
+            #     print(f"items actually clicked {n_clicks.item()}")
+            #     print(f"clicked items recommended {hits}")
+            #     print(action_probs)
 
-            returns = self.REINFORCE.get_returns(ep_len)
+            returns = self.REINFORCE.get_returns(ep_len, gamma)
             policy_loss = self.REINFORCE.get_loss(returns)
 
             self.optimizer.zero_grad()
             policy_loss.backward()
-            nn.utils.clip_grad_norm_(self.actor.parameters(), 1)
             self.optimizer.step()
 
             self.REINFORCE.reset()
 
             if (i + 1) % freq_lr_schedule == 0:
-                self.scheduler.step()
-                new_lr = self.optimizer.param_groups[0]['lr']
-                print(f"[INFO] new learning rate: {new_lr:.6f}")
+                self._update_learning_rate()
 
             if (i + 1) % freq_checkpoint_save == 0:
-                self._save_model(self.ckpt_num)
+                self._save_model()
                 self.ckpt_num += 1
 
         self._save_model(final=True)

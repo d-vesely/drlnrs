@@ -37,3 +37,18 @@ class EvaluatorDQN(_EvaluatorBase):
         q_values = q_values.reshape(-1)
         desc_sort_order = torch.argsort(q_values, descending=True)
         return desc_sort_order
+
+    # def _get_desc_sort_order_duel(self, state, candidates):
+    #     state = state.unsqueeze(0)
+    #     if len(state.shape) == 3:
+    #         rep_shape = [len(candidates), 1, 1]
+    #     else:
+    #         rep_shape = [len(candidates), 1]
+    #     state_repeated = state.repeat(*rep_shape)
+    #     vals, advs = self.dqn(state_repeated, candidates)
+    #     print(vals.shape)
+    #     print(advs.shape)
+    #     q_values = vals.mean(dim=-1) + (advs - advs.mean(dim=-1))
+    #     q_values = q_values.reshape(-1)
+    #     desc_sort_order = torch.argsort(q_values, descending=True)
+    #     return desc_sort_order
