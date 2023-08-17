@@ -129,7 +129,7 @@ class _EvaluatorBase():
             header=False
         )
 
-    def _write_eval_result_file(self):
+    def _write_eval_result_file(self, suffix=""):
         print(
             f"[INFO] writing evaluation results file to {self.pred_dir}"
         )
@@ -138,7 +138,7 @@ class _EvaluatorBase():
         data_eval_results = pd.read_csv(self.results)
         # Write to txt file
         data_eval_results.to_csv(
-            os.path.join(self.pred_dir, "eval_results.txt"),
+            os.path.join(self.pred_dir, f"eval_results{suffix}.txt"),
             sep='\t',
             index=False,
             header=True
@@ -182,61 +182,6 @@ class _EvaluatorBase():
         print(f"[RESULT] Return: {mean_return:.4f}")
         return mean_return
 
-        # desc_sort_order = torch.zeros(
-        #    len(shown_news_list), device=self.device)
-        # desc_sort_order = []
-        # q_values_full = torch.zeros(
-        #     (len(candidates), 2), device=self.device)
-
-        # history_copy = history.copy()
-
-        # for _ in range(3):
-        #     # Copy state for each candidate
-        #     state_repeated = state.repeat(len(candidates), 1)
-        #     pmfs = dqn(state_repeated, candidates)
-        #     q_values = c51._get_q_values(pmfs, dqn.supports)
-        #     small_j = 0
-        #     state_repeated = state.repeat(len(candidates), 1)
-        #     pmfs = dqn(state_repeated, candidates)
-        #     q_values = c51._get_q_values(pmfs, dqn.supports)
-        #     small_j = 0
-        #     for j in range(len(q_values_full)):
-        #         if j in desc_sort_order:
-        #             q_values_full[j] = torch.zeros(2)
-        #             continue
-        #         q_values_full[j] = q_values[small_j]
-        #         small_j += 1
-        #     best_index = torch.argmax(q_values_full[:, 1])
-        #     # best_q = q_values_full[:, 1][best_index]
-        #     desc_sort_order.append(best_index)
-        #     best_news = shown_news_list[best_index]
-        #     history_copy.append(best_news)
-        #     state = eval_dataset.encoder.encode_history(history_copy)
-        #     candidates = torch.cat(
-        #         (candidates[:best_index], candidates[best_index+1:]))
-        #     state = state.to(self.device)
-        #     candidates = candidates.to(self.device)
-
-        # state_repeated = state.repeat(len(candidates), 1)
-        # pmfs = dqn(state_repeated, candidates)
-        # q_values = c51._get_q_values(pmfs, dqn.supports)
-        # small_j = 0
-        # for j in range(len(q_values_full)):
-        #     if j in desc_sort_order:
-        #         q_values_full[j] = torch.zeros(2)
-        #         continue
-        #     q_values_full[j] = q_values[small_j]
-        #     small_j += 1
-
-        # desc_sort_order_remaining = torch.argsort(
-        #     q_values_full[:, 1], descending=True)
-
-        # desc_sort_order_remaining = desc_sort_order_remaining[:-3]
-
-        # desc_sort_order.extend(desc_sort_order_remaining)
-
-        # desc_sort_order = np.array([t.item() for t in desc_sort_order])
-
     def evaluate(self):
         csv_writer = self._prepare_prediction_buffer()
         for ckpt in self.model_ckpts:
@@ -256,7 +201,7 @@ class _EvaluatorBase():
             for index in tqdm(self.sampler):
                 if self.development:
                     impression_id, state, candidates, \
-                        clicked_news, shown_news = self.eval_data[index]
+                        clicked_news, shown_news, _ = self.eval_data[index]
                 else:
                     impression_id, state, candidates = self.eval_data[index]
 
@@ -289,5 +234,64 @@ class _EvaluatorBase():
 
         if self.development:
             self._write_eval_result_file()
+
+        print("[DONE] evaluation completed")
+
+    def evaluate_sequential(self):
+        csv_writer = self._prepare_prediction_buffer()
+        for ckpt in self.model_ckpts:
+            if hasattr(self, "ac"):
+                ckpt_name = ckpt
+            else:
+                ckpt_name = os.path.basename(ckpt)
+
+            if "final" not in ckpt_name:
+                continue
+            print(
+                f"[INFO] evaluating '{self.model_name}', checkpoint '{ckpt_name}'"
+            )
+
+            self._load_checkpoint(ckpt)
+
+            if self.development:
+                returns = []
+
+            for index in tqdm(self.sampler):
+                if self.development:
+                    impression_id, state, candidates, \
+                        clicked_news, shown_news, init_hist_len = self.eval_data[index]
+                else:
+                    impression_id, state, candidates = self.eval_data[index]
+
+                # Move all elements to device
+                state = state.to(self.device)
+                candidates = candidates.to(self.device)
+
+                with torch.no_grad():
+                    desc_sort_order = self._get_desc_sort_order_sequential(
+                        state,
+                        candidates,
+                        init_hist_len
+                    )
+
+                if self.development:
+                    G = self._get_return(
+                        desc_sort_order,
+                        clicked_news,
+                        shown_news
+                    )
+                    returns.append(G)
+                else:
+                    pred = self._get_prediction(desc_sort_order, impression_id)
+                    csv_writer.writerow(pred)
+
+            if self.development:
+                mean_return = self._compute_mean_return(returns)
+                csv_writer.writerow([ckpt_name, mean_return])
+            else:
+                self._write_predictions_file()
+
+        if self.development:
+            self._write_eval_result_file(suffix="_seq")
 
         print("[DONE] evaluation completed")

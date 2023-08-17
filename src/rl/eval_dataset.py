@@ -42,6 +42,6 @@ class EvalDataset(Dataset):
         enc_candidates = self.encoder.encode_candidates(candidates)
 
         if self.development:
-            return impression_id, enc_history, enc_candidates, clicked_news, candidates
+            return impression_id, enc_history, enc_candidates, clicked_news, candidates, len(history)
 
         return impression_id, enc_history, enc_candidates

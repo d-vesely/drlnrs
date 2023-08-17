@@ -318,7 +318,8 @@ def load_embeddings(save_dir, to_embed="title"):
     return embeddings_map
 
 
-def build_feature_vectors(data_news, feature_columns, map_name, save_dir=None):
+def build_feature_vectors(data_news, feature_columns, map_name,
+                          save_dir=None, norm=False):
     # Construct save_dir, if provided
     if save_dir is not None:
         save_dir = os.path.join(save_dir, "embeddings")
@@ -344,6 +345,16 @@ def build_feature_vectors(data_news, feature_columns, map_name, save_dir=None):
         for i, c in enumerate(feature_columns):
             feature_vector[i] = row[c]
         features_map[news_id] = feature_vector
+
+    if norm:
+        values_tensor = torch.stack(list(features_map.values()))
+        mean = values_tensor.mean(dim=0)
+        std = values_tensor.std(dim=0)
+        normalized_features_map = {}
+        for key, val in features_map.items():
+            normalized_features_map[key] = ((val - mean) / std)
+
+        features_map = normalized_features_map
 
     print("[INFO] saving")
     if save_dir is not None:

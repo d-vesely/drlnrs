@@ -93,14 +93,21 @@ def get_trainee(config_model, device):
     return nets, target_map
 
 
-def get_evaluatee(config_model, device):
+def get_evaluatee(config_model, device, involved):
     type = config_model["type"]
     net_params = config_model["net_params"]
 
-    if type == "default":
-        actor = Actor(**net_params)
-    actor = actor.to(device)
-    actor.eval()
+    nets = []
+    if "a" in involved:
+        if type == "default":
+            actor = Actor(**net_params)
+        actor = actor.to(device)
+        actor.eval()
+        nets.append(actor)
+    if "c" in involved:
+        critic = Critic(**net_params)
+        critic = critic.to(device)
+        critic.eval()
+        nets.append(critic)
 
-    nets = [actor]
     return nets

@@ -140,8 +140,6 @@ class TrainerDDPG(_TrainerBase):
         action_sum_loss = (proto_action.square().sum(dim=1).mean() - 6.769)**2
 
         loss_actor = -self.critic(state, proto_action).mean() + action_sum_loss
-        print(proto_action)
-        print(loss_actor)
         self.optimizer_actor.zero_grad()
         loss_actor.backward()
         self.optimizer_actor.step()

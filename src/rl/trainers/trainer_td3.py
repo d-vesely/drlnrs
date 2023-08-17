@@ -169,11 +169,11 @@ class TrainerTD3(_TrainerBase):
             action_sum_loss = (
                 proto_action.square().sum(dim=1).mean() - 6.769)**2
             if np.random.uniform() < 0.5:
-                loss_actor = -self.critic_1(state, proto_action).mean()
+                loss_actor = - \
+                    self.critic_1(state, proto_action).mean() + action_sum_loss
             else:
-                loss_actor = -self.critic_2(state, proto_action).mean()
-            print(proto_action)
-            print(loss_actor)
+                loss_actor = - \
+                    self.critic_2(state, proto_action).mean() + action_sum_loss
             self.optimizer_actor.zero_grad()
             loss_actor.backward()
             self.optimizer_actor.step()
