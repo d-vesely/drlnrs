@@ -1,0 +1,15 @@
+{
+    "embeddings_map_paths": {
+        "title_and_abstract": "c:\\workbench\\developer\\drlnrs\\dataset_MIND\\MINDlarge_all\\embeddings\\title_and_abstract_emb_map.pt",
+        "features": "c:\\workbench\\developer\\drlnrs\\dataset_MIND\\MINDlarge_all\\embeddings\\train_norm_no_ts_features_map.pt"
+    },
+    "news_enc_elements": [
+        "title_and_abstract",
+        "features"
+    ],
+    "news_embedding_size": 778,
+    "history_enc_method": "mean",
+    "weighted": true,
+    "alpha": 0.999,
+    "history_max_len": null
+}

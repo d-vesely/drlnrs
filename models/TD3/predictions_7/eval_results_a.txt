@@ -1,0 +1,7 @@
+checkpoint	mean_return
+('c:\\workbench\\developer\\drlnrs\\models\\TD3\\checkpoints_7\\actor_1.pth', 'c:\\workbench\\developer\\drlnrs\\models\\TD3\\checkpoints_7\\critic_1_1.pth')	0.5951030373568431
+('c:\\workbench\\developer\\drlnrs\\models\\TD3\\checkpoints_7\\actor_2.pth', 'c:\\workbench\\developer\\drlnrs\\models\\TD3\\checkpoints_7\\critic_1_2.pth')	0.5782177367099459
+('c:\\workbench\\developer\\drlnrs\\models\\TD3\\checkpoints_7\\actor_3.pth', 'c:\\workbench\\developer\\drlnrs\\models\\TD3\\checkpoints_7\\critic_1_3.pth')	0.6025616384255978
+('c:\\workbench\\developer\\drlnrs\\models\\TD3\\checkpoints_7\\actor_4.pth', 'c:\\workbench\\developer\\drlnrs\\models\\TD3\\checkpoints_7\\critic_1_4.pth')	0.6129511191473856
+('c:\\workbench\\developer\\drlnrs\\models\\TD3\\checkpoints_7\\actor_5.pth', 'c:\\workbench\\developer\\drlnrs\\models\\TD3\\checkpoints_7\\critic_1_5.pth')	0.6145290274754405
+('c:\\workbench\\developer\\drlnrs\\models\\TD3\\checkpoints_7\\actor_final.pth', 'c:\\workbench\\developer\\drlnrs\\models\\TD3\\checkpoints_7\\critic_1_final.pth')	0.6343691004031168

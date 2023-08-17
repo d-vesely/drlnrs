@@ -1,3 +1,0 @@
-checkpoint	mean_return
-dqn_1.pth	0.6270089539956257
-dqn_2.pth	0.6971561544091537

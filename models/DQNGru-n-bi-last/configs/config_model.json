@@ -4,6 +4,6 @@
     "net_params": {
         "item_size": 768,
         "hidden_size": 4096,
-        "mode": "additive"
+        "mode": "last"
     }
 }

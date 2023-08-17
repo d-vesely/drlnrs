@@ -1,9 +1,10 @@
 {
-    "type": "gru",
+    "type": "default",
     "double_learning": false,
+    "indirect": false,
     "net_params": {
         "item_size": 768,
         "hidden_size": 4096,
-        "mode": "additive"
+        "state_size": 768
     }
 }
