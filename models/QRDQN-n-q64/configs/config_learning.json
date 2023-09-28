@@ -7,6 +7,9 @@
     "n_steps": 6000000,
     "freq_lr_schedule": 1000000,
     "freq_checkpoint_save": 1000000,
+    "pos_mem_pref_adapt": false,
+    "freq_pos_mem_pref_adapt": 6000000,
+    "pos_mem_pref_adapt_step": 0.04,
     "progress_saves": [
         10000,
         100000,
