@@ -1,0 +1,17 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: DRLNRS
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Dominik
+    family-names: Veselý
+    email: dominik.vesely7@gmail.com
+    affiliation: Vienna University of Technology
+    orcid: 'https://orcid.org/0009-0005-9891-2028'
+repository-code: 'https://github.com/d-vesely/drlnrs'
+license: MIT
