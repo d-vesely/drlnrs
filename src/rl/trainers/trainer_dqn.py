@@ -7,6 +7,8 @@ from .trainer_base import _TrainerBase
 
 
 class TrainerDQN(_TrainerBase):
+    """Trainer for DQN"""
+
     def __init__(self, model_name, device,
                  pos_rm_path, neg_rm_path,
                  encoder_params, learning_params, model_params,
@@ -24,14 +26,19 @@ class TrainerDQN(_TrainerBase):
         )
 
     def set_trainee(self):
+        """Prepare trainee"""
+        # Get model architecture and online-target map
         nets, target_map = get_trainee(
             self.config_model,
             self.device
         )
         self.dqn, self.target_dqn = nets
         self.target_map = target_map
+
+        # Print number of trainable parameters
         self._print_num_params(self.dqn.parameters(), name="DQN")
 
+        # Prepare optimizer and scheduler
         self.optimizer = optim.AdamW(
             self.dqn.parameters(),
             lr=self.config_learning["learning_rate"],
@@ -40,6 +47,8 @@ class TrainerDQN(_TrainerBase):
         self.optimizers = [self.optimizer]
         self.schedulers = self._prepare_schedulers()
         self.criterion = nn.SmoothL1Loss()
+
+        # Get DQN type and set correct training step method
         double_learning = self.config_model["double_learning"]
         if double_learning:
             self._training_step = self._training_step_double
@@ -49,6 +58,8 @@ class TrainerDQN(_TrainerBase):
             self._training_step = self._training_step
 
     def _training_step(self, batch, step_i, gamma, print_q):
+        """Single training step"""
+        # Load batch
         state, item, reward, next_state, candidates, not_done = batch
         n_candidates = candidates.shape[1]
 
@@ -65,7 +76,6 @@ class TrainerDQN(_TrainerBase):
             next_q_value = self.target_dqn(next_state_rep, candidates)
             next_q_value = next_q_value.squeeze(-1)
 
-            # TODO
             # Set q-values produced by padded-candidates to large negative number
             next_q_value = torch.nan_to_num(next_q_value, nan=-10000)
             # Find max q-value and compute target
@@ -82,6 +92,8 @@ class TrainerDQN(_TrainerBase):
         self.optimizer.step()
 
     def _training_step_duel(self, batch, step_i, gamma, print_q):
+        """Single dueling DQN training step"""
+        # Load batch
         state, item, reward, next_state, candidates, not_done = batch
         n_candidates = candidates.shape[1]
 
@@ -118,6 +130,7 @@ class TrainerDQN(_TrainerBase):
         self.optimizer.step()
 
     def _training_step_double(self, batch, step_i, gamma, print_q):
+        """Single double DQN training step"""
         state, item, reward, next_state, candidates, not_done = batch
         n_candidates = candidates.shape[1]
 
@@ -130,22 +143,19 @@ class TrainerDQN(_TrainerBase):
             rep_shape = self._get_rep_shape(state.shape, n_candidates)
             next_state_rep = next_state.unsqueeze(1).repeat(*rep_shape)
 
-            # Compute q-values for all candidates
+            # Compute q-values for all candidates with online network
             next_q_value = self.dqn(next_state_rep, candidates)
             next_q_value = next_q_value.squeeze(-1)
 
-            # TODO
             # Set q-values produced by padded-candidates to large negative number
             next_q_value = torch.nan_to_num(next_q_value, nan=-10000)
-            if torch.any(torch.isnan(next_q_value)):
-                print(next_q_value)
-                return
-            # Find max q-value and compute target
+            # Find best candidate
             argmax_next_q_value = torch.argmax(next_q_value, dim=1)
             best_candidates = candidates[
                 torch.arange(candidates.shape[0]),
                 argmax_next_q_value
             ]
+            # Compute q-values for best candidate with target network
             max_next_q_value = self.target_dqn(next_state, best_candidates)
             max_next_q_value = max_next_q_value.squeeze(-1)
             max_next_q_value[(not_done == 0)] = 0.0
@@ -161,6 +171,7 @@ class TrainerDQN(_TrainerBase):
         self.optimizer.step()
 
     def _get_rep_shape(self, state_shape, n_candidates):
+        """Get correct shape for repeating state"""
         rep_shape = [1, n_candidates, 1]
         if len(state_shape) == 3:
             rep_shape.append(1)
