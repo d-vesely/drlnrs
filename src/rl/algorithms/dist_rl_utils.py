@@ -2,6 +2,7 @@ import torch
 
 
 def get_huber_loss(td_error, k=1.0):
+    """Compute huber loss for given temp.-diff. error"""
     huber_loss = torch.where(
         td_error.abs() <= k,
         0.5 * td_error.pow(2),

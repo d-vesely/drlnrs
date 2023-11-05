@@ -1,3 +1,8 @@
+# This file contains dictionaries that map categories/subcategories to
+# other values. In the case of categories to fix mistakes, in the case
+# of subcategories to make them human-readable and embeddable. These
+# maps are applied during preprocessing.
+
 CATEGORY_MAP = {
     "foodanddrink": "food and drink",
     "middleeast": "news",

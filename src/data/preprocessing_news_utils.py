@@ -62,6 +62,8 @@ def concat_data_news(data_news_list, save_dir=None):
 
 
 def _remap_categories(data_news):
+    """Map categories and subcategories to other values, as
+    specified in category_maps.py"""
     data_news.replace({"category": CATEGORY_MAP}, inplace=True)
     for c, sc_map in SUB_CATEGORY_MAP.items():
         mask = data_news["category"] == c

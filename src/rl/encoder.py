@@ -16,18 +16,20 @@ class Encoder():
             embeddings_map_path -- dict containing paths to embeddings map files
 
         Keyword Arguments:
+            news_enc_elements -- which news elements to encode (default: {["title"]})
+            news_embedding_size -- size of embedding vector (default: {768})
             history_enc_method -- encoding method (default: {"mean"})
             weighted -- whether to apply weights to encoding method (default: {False})
             alpha -- weight (default: {0.99})
             history_max_len -- truncate histories to this length (default: {None})
-            embedding_size -- size of embedding vector (default: {768})
 
         Raises:
             ValueError:
-                - method value is not one of: ["stack", "mean", "product"] OR
-                - alpha not in (0, 1) OR
-                - history_max_len not set for 'stack' or 'product' methods
+                - method value is not one of: ["stack", "mean", "dist", "ltstl"] OR
+                - alpha not in interval (0, 1) OR
+                - history_max_len not set for 'stack' method
         """
+        # Check for potential value errors
         if alpha <= 0 or alpha >= 1:
             raise ValueError(f"[ERR] alpha must be in (0, 1), got {alpha}")
 
@@ -50,6 +52,7 @@ class Encoder():
         self.history_enc_method = history_enc_method
 
     def _load_embeddings_maps(self, embeddings_map_paths):
+        """Load embedding maps according to elements to be used"""
         assert list(embeddings_map_paths.keys()) == self.news_enc_elements
         self.embeddings_maps = {}
         for enc_elem in self.news_enc_elements:
@@ -61,24 +64,20 @@ class Encoder():
         """Get encoded history for empty history"""
         # Format of encoded history depends on method
         if self.history_enc_method == "stack":
-            # 1 mean embedding vector of old history
-            # n embedding vectors of new history
-            size = self.news_embedding_size + \
-                (self.history_max_len * self.news_embedding_size)
-            enc_history = torch.zeros(size)
-            # enc_history = torch.zeros(
-            #    (self.history_max_len + 1, self.news_embedding_size))  # TODO
+            # stack of n embedding vectors
             enc_history = torch.zeros(
-                (self.history_max_len, self.news_embedding_size))  # TODO
+                (self.history_max_len, self.news_embedding_size))
 
         elif self.history_enc_method == "mean":
             # 1 mean embedding vector
             enc_history = torch.zeros(self.news_embedding_size)
 
         elif self.history_enc_method == "dist":
+            # 3 concatenated embedding vectors
             enc_history = torch.zeros(3 * self.news_embedding_size)
 
         elif self.history_enc_method == "ltstl":
+            # 3 concatenated embedding vectors
             enc_history = torch.zeros(3 * self.news_embedding_size)
 
         return enc_history
@@ -140,6 +139,7 @@ class Encoder():
         return enc_history
 
     def _get_quantile_history_stack(self, history_stack):
+        """Concatenate quartiles of history stack"""
         quantiles = torch.tensor([0.25, .5, .75])
         enc_history = torch.quantile(
             history_stack,
@@ -150,30 +150,26 @@ class Encoder():
         return enc_history
 
     def _get_ltstl_history_stack(self, history_stack, weights=None):
+        """Create ltstl encoding of history stack"""
+        # Get long-term encoding
         lt = self._get_mean_history_stack(
             history_stack,
             weights=weights
         )
+        # Get short-term encoding
         if weights is not None:
             weights = weights[-5:]
         st = self._get_mean_history_stack(
             history_stack[-5:],
             weights=weights
         )
+        # Get last read item
         l = history_stack[-1]
         enc_history = torch.cat((lt, st, l))
         return enc_history
 
-    def _get_pairwise_products(self, history_stack):
-        """Create list of pairwise products over entire history stack"""
-        # Compute (n * (n-1) / 2) pairwise products
-        products = []
-        for i in range(history_stack.shape[0] - 1):
-            p = history_stack[i+1:] * history_stack[i]
-            products.append(p)
-        return products
-
     def _get_features(self, news_id):
+        """Get numerical features for news"""
         return self.feature_map[news_id]
 
     def encode_history(self, history):
@@ -224,7 +220,7 @@ class Encoder():
             # Multiply embeddings by weights
             recent_history_stack = torch.mul(weights, recent_history_stack)
 
-        # Reshape stack into single vector
+        # Leave stack untouched
         if self.history_enc_method == "stack":
             enc_recent_history = recent_history_stack
 
@@ -246,7 +242,7 @@ class Encoder():
                 weights=weights if self.weighted else None
             )
 
-        # Append mean of old history to encoded history
+        # This code
         if self.history_enc_method == "stack":
             if old_history_len != 0:
                 enc_old_history = self._get_mean_history_stack(
@@ -257,7 +253,9 @@ class Encoder():
                 enc_old_history = old_history_stack
 
             # enc_history = torch.vstack(
-            #    (enc_old_history, enc_recent_history))  # TODO
+            #    (enc_old_history, enc_recent_history))
+            #! Currently, we do not append the old history to the
+            #! stack, but the code above can be commented in
             enc_history = enc_recent_history
 
         return enc_history
@@ -266,14 +264,17 @@ class Encoder():
         """Encode set of candidate news"""
         # Prepare stack
         candidates_stack = torch.empty(
-            (len(candidates), self.news_embedding_size))
+            (len(candidates), self.news_embedding_size)
+        )
         # Append each candidate's embedding to stack
         for i, news_id in enumerate(candidates):
             candidates_stack[i] = self.encode_news(news_id)
         return candidates_stack
 
     def encode_news(self, news_id):
+        """Encode news item"""
         news_embedding = torch.empty(0)
+        # Incrementally add embeddings of elements to be encoded
         for enc_elem in self.news_enc_elements:
             embedding = self.embeddings_maps[enc_elem][news_id]
             news_embedding = torch.cat((news_embedding, embedding))

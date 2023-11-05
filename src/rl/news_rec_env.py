@@ -5,23 +5,29 @@ import random
 class NewsRecEnv():
     """News recommendation simulation environment
 
-    # TODO
+    This class wraps methods that can be used to simulate individual
+    steps or entire impressions in the news recommendation environment.
     """
 
-    def __init__(self, timestamp=None, history=[], candidates=set(), ignore_history=deque(maxlen=10)):
+    def __init__(self, timestamp=None, history=[], candidates=set(),
+                 ignore_history=deque(maxlen=10)):
         """Initialize news rec environment
 
         Keyword Arguments:
+            timestamp -- impression timestamp (default: None)
             history -- list of previously read news (default: {[]})
             candidates -- list of candidates available for 
             recommendation (default: {set()})
+            ignore_history -- list of previously ignored news
+            (default: {deque(maxlen=10)})
         """
         self.timestamp = timestamp
         self.history = history
         self.candidates = candidates
         self.ignore_history = ignore_history
 
-    def set_state(self, timestamp, history, candidates, ignore_history=deque(maxlen=10)):
+    def set_state(self, timestamp, history, candidates,
+                  ignore_history=deque(maxlen=10)):
         """Set environment's state"""
         self.timestamp = timestamp
         self.history = history
@@ -91,6 +97,9 @@ class NewsRecEnv():
         Arguments:
             clicked_news -- set of clicked news in the impression
 
+        Keyword Arguments:
+            use_ignore_history -- whether to use ignore history (default: False)
+
         Returns:
             a list of lists, with each list containing information
             about each step of the impression
@@ -127,7 +136,9 @@ class NewsRecEnv():
             if use_ignore_history:
                 next_ignore_histories.append(list(self.ignore_history.copy()))
 
+        # Impression timestamp is the same for all steps
         timestamps = [self.timestamp] * len(recommendeds)
+
         # Return list of lists
         impression = [timestamps, recommendeds,
                       rewards, next_histories, next_candidates]

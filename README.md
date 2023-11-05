@@ -41,15 +41,15 @@ conda activate drlnrs
 
 In this Section, we briefly want to present each notebook, since they serve as the main entry points to the codebase and should be used, when reproducing the results from the thesis (for details, see [below](#reproducing-results))
 
-- [`categories.ipynb`](./categories.ipynb): This notebook facilitates the exploration of the news categories and subcategories present in the dataset.
-- [`embedding.ipynb`](./embedding.ipynb): This notebook facilitates the creation of the embeddings used in the thesis, using the [Sentence Transformer Library](https://www.sbert.net/) and the [OpenAI API](https://platform.openai.com/docs/guides/embeddings). The notebook also contains the code to produce feature vectors.
-- [`evaluation.ipynb`](./evaluation.ipynb): This notebook contains the code to evaluate a trained agent. It is designed to work in tandem with the training notebook, it is thus best to train agents with the corresponding notebook. The notebook also contains code to produce a random baseline.
-- [`preprocessing.ipynb`](./preprocessing.ipynb): This notebook contains all of the required code to run all preprocessing steps, for both the behaviors (impression) data and the news data. It also contains some exploratory analysis.
-- [`replay_memory_building.ipynb`](./replay_memory_building.ipynb): This notebook contains the code to build the replay memory used for training.
-- [`training.ipynb`](./training.ipynb): This notebook can be used to train DRLRS agents. The user can easily edit news/user encoder settings, hyperparameter settings and model settings.
-- [`visualization_behaviors.ipynb`](./visualization_behaviors.ipynb): This notebook can be used to recreate the figures in the thesis pertaining to the behaviors (impression) data.
-- [`visualization_news.ipynb`](./visualization_news.ipynb): This notebook can be used to recreate the figures in the thesis pertaining to the news data.
-- [`visualization_results.ipynb`](./visualization_results.ipynb): This notebook can be used to recreate the figures in the thesis pertaining to the results.
+- [`categories.ipynb`](./categories.ipynb): this notebook facilitates the exploration of the news categories and subcategories present in the dataset.
+- [`embedding.ipynb`](./embedding.ipynb): this notebook facilitates the creation of the embeddings used in the thesis, using the [Sentence Transformer Library](https://www.sbert.net/) and the [OpenAI API](https://platform.openai.com/docs/guides/embeddings). The notebook also contains the code to produce feature vectors.
+- [`evaluation.ipynb`](./evaluation.ipynb): this notebook contains the code to evaluate a trained agent. It is designed to work in tandem with the training notebook, it is thus best to train agents with the corresponding notebook. The notebook also contains code to produce a random baseline.
+- [`preprocessing.ipynb`](./preprocessing.ipynb): this notebook contains all of the required code to run all preprocessing steps, for both the behaviors (impression) data and the news data. It also contains some exploratory analysis.
+- [`replay_memory_building.ipynb`](./replay_memory_building.ipynb): this notebook contains the code to build the replay memory used for training.
+- [`training.ipynb`](./training.ipynb): this notebook can be used to train DRLRS agents. The user can easily edit news/user encoder settings, hyperparameter settings and model settings.
+- [`visualization_behaviors.ipynb`](./visualization_behaviors.ipynb): this notebook can be used to recreate the figures in the thesis pertaining to the behaviors (impression) data.
+- [`visualization_news.ipynb`](./visualization_news.ipynb): this notebook can be used to recreate the figures in the thesis pertaining to the news data.
+- [`visualization_results.ipynb`](./visualization_results.ipynb): this notebook can be used to recreate the figures in the thesis pertaining to the results.
 
 ## Reproducing Results
 
@@ -61,6 +61,18 @@ We briefly want to outline the required steps to reproduce the results of the th
 4. Use the notebook [`replay_memory_building.ipynb`](./replay_memory_building.ipynb) to produce the replay memory required for training. As documented in the notebook, it might be necessary to adapt certain parameters, depending on your hardware (the replay memory is extremely large and has to be produced in splits, which are then concatenated back together; how many splits will be necessary will depend on your RAM). The key part to ensure reproducibility, is to leave the seed (42) and the fraction (0.2) for the extraction of negative experiences untouched (the amount of ignored news is extremely large, therefore, we sample 20% of it and use it for training, discarding the remaining 80%).
 5. Use the notebook [`training.ipynb`](./training.ipynb) to train DRLRS agents. To reproduce a specific result, use the published config files to set the news/user encoder settings, hyperparameter and model settings accordingly. Then, train the agents using the specific seeds (7 and 42, which is prepared in the notebook). For example, to reproduce the results for the model `C51-n`, we use the configuration files from [`models/C51-n/configs/`](./models/C51-n/configs/) to adapt the notebook accordingly, and then run training. It is best to change the model name, so that a new directory is created, e.g. `C51-n-repro`.
 6. Use the notebook [`evaluation.ipynb`](./evaluation.ipynb) to evaluate trained agents. For example, to evaluate the trained agent `C51-n-repro`, we have to change the model name in the notebook accordingly. The notebook will do the rest (specifically, using the config files in the corresponding directory to load the checkpoints into the correct model).
+
+## Source Code Structure
+
+The source code, for which the notebooks provide high-level access points, is located in the [`src/`](./src/) directory. The structure of it is as follows.
+
+`data/`: this folder contains all code that pertains to data, i.e. preprocessing and embedding.
+
+`rl/`: this folder contains all code that pertains to reinforcement learning. The top level contains code to construct the replay memory, as well as a wrapper class for the news/user encoder. Furthermore, all implemented DRL algorithms are located in this directory. Concretely, each algorithm has its own `Trainer` and `Evaluator`, which are subclasses of [`_TrainerBase`](./src/rl/trainers/trainer_base.py) and [`_EvaluatorBase`](./src/rl/evaluators/evaluator_base.py). The trainer contains methods for initializing the neural network, optimizers, etc., and the implementation of a single training step. The single training step is utilized in the base trainer. Analogously, the evaluator prepares a trained model for evaluation and implements an evaluation step for a given algorithm. In addition, each DRL algorithm has its own file with neural network architectures and helper methods for that algorithm. For example, the code pertaining to algorithm *C51* can be found in `trainers/trainer_c51.py`, `evaluators/evaluator_c51.py` and `algorithms/c51.py`.
+
+`constants.py`: this file contains all paths to various directories, e.g. the dataset folders (train, dev, test, ...), the models folder, etc..
+
+`common_utils.py`: this file contains utility functions that simplify reading pickled or feathered data.
 
 ## Citation
 

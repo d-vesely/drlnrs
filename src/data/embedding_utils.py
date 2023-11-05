@@ -54,7 +54,7 @@ def embed_news(data_news, checkpoint, save_dir=None, to_embed="title",
 
     Raises:
         ValueError: to_embed value is not one of:
-        ["title", "abstract", "title_and_abstract"]
+        ["title", "abstract", "title_and_abstract", "all"]
 
     Returns:
         dict mapping news IDs to their embedding
@@ -137,6 +137,18 @@ def embed_news(data_news, checkpoint, save_dir=None, to_embed="title",
 
 
 def embed_news_openai(data_news, save_dir=None):
+    """Create OpenAI embeddings for each news
+
+    Arguments:
+        data_news -- news data as pandas dataframe
+
+    Keyword Arguments:
+        save_dir -- where to save the data. If None, data 
+        will not be saved (default: {None})
+
+    Returns:
+        dict mapping news IDs to their embedding
+    """
     model = "text-embedding-ada-002"
     embeddings_map = {}
 
@@ -150,6 +162,7 @@ def embed_news_openai(data_news, save_dir=None):
         texts.append(title_and_abstract)
         ids.append(news_id)
         i += 1
+        # Call API with batches of 1000 values
         if i % 1000 == 0:
             embedding = openai.Embedding.create(
                 input=texts,
@@ -161,6 +174,7 @@ def embed_news_openai(data_news, save_dir=None):
             ids = []
             texts = []
 
+    # Remaining news items that did not fit into batch of 1000
     if ids != []:
         embedding = openai.Embedding.create(
             input=texts,
@@ -170,6 +184,7 @@ def embed_news_openai(data_news, save_dir=None):
             embeddings_map[ids[j]] = torch.tensor(
                 embedding["data"][j]["embedding"])
 
+    # Save embeddings
     print("[INFO] saving")
     if save_dir is not None:
         torch.save(
@@ -182,6 +197,21 @@ def embed_news_openai(data_news, save_dir=None):
 
 
 def embed_categories(data_news, checkpoint, save_dir=None, batch_size=128):
+    """Create embeddings for news (sub)categories
+
+    Arguments:
+        data_news -- news data as pandas dataframe
+        checkpoint -- sentence transformer model checkpoint. List of pretrained
+        models available here: https://www.sbert.net/docs/pretrained_models.html
+
+    Keyword Arguments:
+        save_dir -- where to save the data. If None, data 
+        will not be saved (default: {None})
+        batch_size -- batch size for embedding (default: {32})
+
+    Returns:
+        list of dicts mapping news IDs to their (sub)category embedding
+    """
     # Construct save_dir, if provided
     if save_dir is not None:
         save_dir = os.path.join(save_dir, "embeddings")
@@ -260,6 +290,19 @@ def embed_categories(data_news, checkpoint, save_dir=None, batch_size=128):
 
 
 def one_hot_encode_categories(data_news, save_dir=None):
+    """Create one-hot encodings of the category for each news
+
+    Arguments:
+        data_news -- news data as pandas dataframe
+
+    Keyword Arguments:
+        save_dir -- where to save the data. If None, data 
+        will not be saved (default: {None})
+
+    Returns:
+        dict mapping news IDs to the category one-hot encoding
+    """
+    # Construct save_dir, if provided
     if save_dir is not None:
         save_dir = os.path.join(save_dir, "embeddings")
         if not os.path.exists(save_dir):
@@ -286,8 +329,8 @@ def one_hot_encode_categories(data_news, save_dir=None):
         "kids": 14,
     }
 
+    # Create one-hot encoding
     embeddings_map = {}
-
     for row in tqdm(data_news.itertuples(), total=len(data_news)):
         news_id = row.news_id
         category = row.category
@@ -296,6 +339,7 @@ def one_hot_encode_categories(data_news, save_dir=None):
         embedding[category_index] = 1.0
         embeddings_map[news_id] = embedding
 
+    # Save encodings
     print("[INFO] saving")
     if save_dir is not None:
         torch.save(
@@ -320,6 +364,22 @@ def load_embeddings(save_dir, to_embed="title"):
 
 def build_feature_vectors(data_news, feature_columns, map_name,
                           save_dir=None, norm=False):
+    """Construct vectors of numerical features for each news
+
+    Arguments:
+        data_news -- news data as pandas dataframe
+        feature_columns -- list of features to include
+        map_name -- the name of the feature map, for saving
+
+    Keyword Arguments:
+        save_dir -- where to save the data. If None, data 
+        will not be saved (default: {None})
+        norm -- whether to normalize the features to mean 0
+        and std 1 (default: {False})
+
+    Returns:
+        dict mapping news IDs to feature vectors
+    """
     # Construct save_dir, if provided
     if save_dir is not None:
         save_dir = os.path.join(save_dir, "embeddings")
@@ -346,6 +406,7 @@ def build_feature_vectors(data_news, feature_columns, map_name,
             feature_vector[i] = row[c]
         features_map[news_id] = feature_vector
 
+    # Normalize to mean 0 and std 1
     if norm:
         values_tensor = torch.stack(list(features_map.values()))
         mean = values_tensor.mean(dim=0)
@@ -356,6 +417,7 @@ def build_feature_vectors(data_news, feature_columns, map_name,
 
         features_map = normalized_features_map
 
+    # Save feature map
     print("[INFO] saving")
     if save_dir is not None:
         torch.save(

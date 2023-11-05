@@ -15,18 +15,19 @@ class ReplayMemoryDataset(Dataset):
         """Initialize replay memory dataset
 
         Arguments:
-            embeddings_map_path -- path to embeddings map
+            news_embedding_size -- size of news embedding
             replay_memory_path -- path to replay memory pickle
 
         Keyword Arguments:
-            encoder_kwargs -- encoder_kwargs (default: {{}})
+            encoder_kwargs -- encoder keyword-args (default: {{}})
+            use_ignore_history -- whether to use ignore history (default: False)
         """
-        # Initialize encoder
+        # Initialize encoder with kwargs
         assert news_embedding_size == 768 or news_embedding_size == encoder_kwargs[
             "news_embedding_size"]
         self.encoder = Encoder(**encoder_kwargs)
         self.news_embedding_size = news_embedding_size
-        # Read replay memory pandas dataframe
+        # Read replay memory into pandas dataframe
         self.replay_memory = pd.read_feather(replay_memory_path)
         self.use_ignore_history = use_ignore_history
 
@@ -38,16 +39,16 @@ class ReplayMemoryDataset(Dataset):
         """Return item at index"""
         # Fetch column elements
         if self.use_ignore_history:
-            # timestamp, recommended, reward, next_history, next_candidates, next_ignore_history = self.replay_memory.iloc[
-            #     index]
-            recommended, reward, next_history, next_candidates, next_ignore_history = self.replay_memory.iloc[
-                index]
+            # timestamp, recommended, reward, next_history, next_candidates, next_ignore_history \
+            # = self.replay_memory.iloc[index]
+            recommended, reward, next_history, next_candidates, next_ignore_history \
+                = self.replay_memory.iloc[index]
             next_ignore_history = next_ignore_history.tolist()
         else:
-            # timestamp, recommended, reward, next_history, next_candidates = self.replay_memory.iloc[
-            #     index]
-            recommended, reward, next_history, next_candidates = self.replay_memory.iloc[
-                index]
+            # timestamp, recommended, reward, next_history, next_candidates \
+            # = self.replay_memory.iloc[index]
+            recommended, reward, next_history, next_candidates \
+                = self.replay_memory.iloc[index]
         next_history = next_history.tolist()
 
         # timestamp = timestamp.to_datetime64().view(np.int64) / 3.6e12
@@ -74,7 +75,8 @@ class ReplayMemoryDataset(Dataset):
         # If no more candidates, set to NaN vector
         if len(next_candidates) == 0:
             enc_next_candidates = torch.full(
-                (1, self.news_embedding_size), float('nan'))
+                (1, self.news_embedding_size), float('nan')
+            )
         else:
             enc_next_candidates = self.encoder.encode_candidates(
                 next_candidates
@@ -95,6 +97,8 @@ class ReplayMemoryDataset(Dataset):
 
 
 def pad_candidates(batch):
+    """Pad candidates in given batch, needed for mini-batch processing"""
+    # Deconstruct batch
     b_state = torch.stack([data[0] for data in batch])
     b_action = torch.stack([data[1] for data in batch])
     b_reward = torch.stack([data[2] for data in batch])
@@ -106,12 +110,14 @@ def pad_candidates(batch):
     # b_ignore_history = torch.stack([data[5] for data in batch])
     # b_next_ignore_history = torch.stack([data[6] for data in batch])
 
+    # Pad candidates
     padded_candidates = pad_sequence(
         b_candidates,
         batch_first=True,
         padding_value=-torch.inf
     )
 
+    # Return reconstructed batch
     # , b_ignore_history, b_next_ignore_history]
     return [b_state, b_action, b_reward, b_next_state, padded_candidates]
 
@@ -121,15 +127,14 @@ class ReplayMemoryEpisodicDataset(Dataset):
         """Initialize replay memory dataset
 
         Arguments:
-            embeddings_map_path -- path to embeddings map
             replay_memory_path -- path to replay memory pickle
 
         Keyword Arguments:
-            encoder_kwargs -- encoder_kwargs (default: {{}})
+            encoder_kwargs -- encoder keyword-args (default: {{}})
         """
-        # Initialize encoder
+        # Initialize encoder with kwargs
         self.encoder = Encoder(**encoder_kwargs)
-        # Read replay memory pandas dataframe
+        # Read replay memory into pandas dataframe
         self.replay_memory_episodic = pd.read_feather(replay_memory_path)
 
     def __len__(self):
@@ -141,17 +146,20 @@ class ReplayMemoryEpisodicDataset(Dataset):
         # Fetch column elements
         states, items, rewards = self.replay_memory_episodic.iloc[index]
 
+        # Encode all states (histories)
         enc_states = []
         for history in states:
             enc_history = self.encoder.encode_history(history)
             enc_states.append(enc_history)
 
+        # Encode all items (news)
         enc_items = []
         for item in items:
             # Get embedding of recommended news
             enc_recommended = self.encoder.encode_news(item)
             enc_items.append(enc_recommended)
 
+        # Stack all encodings and return
         enc_states = torch.stack(enc_states)
         enc_items = torch.stack(enc_items)
         enc_rewards = torch.stack([torch.tensor(r) for r in rewards])

@@ -11,7 +11,6 @@ class EvalDataset(Dataset):
         """Initialize evaluation dataset
 
         Arguments:
-            embeddings_map_path -- path to embeddings map
             eval_data_path -- path to evaluation data
 
         Keyword Arguments:
@@ -28,6 +27,7 @@ class EvalDataset(Dataset):
 
     def __getitem__(self, index):
         """Return item at index"""
+        # Load data depending on dev or test data
         if self.development:
             # Ignore user_id, timestamp and ignored_news
             impression_id, _, history, _, clicked_news, _, candidates \
@@ -41,6 +41,7 @@ class EvalDataset(Dataset):
         enc_history = self.encoder.encode_history(history)
         enc_candidates = self.encoder.encode_candidates(candidates)
 
+        # Return values depending on dev or test data
         if self.development:
             return impression_id, enc_history, enc_candidates, clicked_news, candidates, len(history)
 
