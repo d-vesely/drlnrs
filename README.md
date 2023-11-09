@@ -1,6 +1,6 @@
 # DRLNRS
 
-This repository contains the code written as part of my Master's thesis, titled **"A Comparative Performance Analysis of Deep Reinforcement Learning News Recommender Systems"** (TODO link). It constitutes a framework for training *Reinforcement Learning* agents on a *News Recommendation* problem, using the [MIND Dataset](https://msnews.github.io/).
+This repository contains the code written as part of my Master's thesis, titled **"A Comparative Performance Analysis of Deep Reinforcement Learning News Recommender Systems"** (read [here](https://doi.org/10.34726/hss.2023.95163)). It constitutes a framework for training *Reinforcement Learning* agents on a *News Recommendation* problem, using the [MIND Dataset](https://msnews.github.io/).
 
 The code in this repository can be used to *reproduce* the results presented in the thesis. It can also be used as a basis for further work, by *extending* the capabilities of the framework, or by *adapting* it to another dataset.
 
@@ -90,5 +90,10 @@ If you use this code in your work, please cite it using GitHub's citation featur
 In addition, please cite the corresponding Master's thesis, using the following BibTex citation.
 
 ```
-TODO
+@mastersthesis{drlnrs,
+  title={A Comparative Performance Analysis of Deep Reinforcement Learning News Recommender Systems},
+  author={Vesel{\`y}, Dominik},
+  year={2023},
+  school={Vienna University of Technology}
+}
 ```
